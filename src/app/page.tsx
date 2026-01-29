@@ -1,6 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Todo {
   id: string;
@@ -11,12 +28,162 @@ interface Todo {
 
 type FilterType = 'all' | 'active' | 'completed';
 
+interface SortableTodoItemProps {
+  todo: Todo;
+  editingId: string | null;
+  editingText: string;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onStartEdit: (id: string, text: string) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onEditTextChange: (text: string) => void;
+}
+
+function SortableTodoItem({
+  todo,
+  editingId,
+  editingText,
+  onToggle,
+  onDelete,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onEditTextChange,
+}: SortableTodoItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: todo.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`group p-4 hover:bg-gray-50 transition-colors ${
+        isDragging ? 'opacity-50 bg-indigo-50 shadow-lg z-10' : ''
+      }`}
+    >
+      {editingId === todo.id ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={editingText}
+            onChange={(e) => onEditTextChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveEdit();
+              if (e.key === 'Escape') onCancelEdit();
+            }}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
+            autoFocus
+          />
+          <button
+            onClick={onSaveEdit}
+            className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+          >
+            保存
+          </button>
+          <button
+            onClick={onCancelEdit}
+            className="px-3 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+          >
+            取消
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+            title="拖拽排序"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+            </svg>
+          </button>
+
+          {/* Checkbox */}
+          <button
+            onClick={() => onToggle(todo.id)}
+            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+              todo.completed
+                ? 'bg-gradient-to-r from-green-400 to-emerald-500 border-transparent'
+                : 'border-gray-300 hover:border-indigo-400'
+            }`}
+          >
+            {todo.completed && (
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+
+          {/* Todo Text */}
+          <span
+            className={`flex-1 text-lg transition-all ${
+              todo.completed
+                ? 'text-gray-400 line-through'
+                : 'text-gray-700'
+            }`}
+          >
+            {todo.text}
+          </span>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onStartEdit(todo.id, todo.text)}
+              className="p-2 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
+              title="编辑"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onDelete(todo.id)}
+              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="删除"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Load todos from localStorage on mount
   useEffect(() => {
@@ -81,6 +248,18 @@ export default function Home() {
 
   const clearCompleted = () => {
     setTodos(todos.filter(todo => !todo.completed));
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setTodos((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
   };
 
   const filteredTodos = todos.filter(todo => {
@@ -159,93 +338,33 @@ export default function Home() {
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-100">
-              {filteredTodos.map((todo) => (
-                <li
-                  key={todo.id}
-                  className="group p-4 hover:bg-gray-50 transition-colors"
-                >
-                  {editingId === todo.id ? (
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editingText}
-                        onChange={(e) => setEditingText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEdit();
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800"
-                        autoFocus
-                      />
-                      <button
-                        onClick={saveEdit}
-                        className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="px-3 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      {/* Checkbox */}
-                      <button
-                        onClick={() => toggleTodo(todo.id)}
-                        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                          todo.completed
-                            ? 'bg-gradient-to-r from-green-400 to-emerald-500 border-transparent'
-                            : 'border-gray-300 hover:border-indigo-400'
-                        }`}
-                      >
-                        {todo.completed && (
-                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </button>
-
-                      {/* Todo Text */}
-                      <span
-                        className={`flex-1 text-lg transition-all ${
-                          todo.completed
-                            ? 'text-gray-400 line-through'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        {todo.text}
-                      </span>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => startEditing(todo.id, todo.text)}
-                          className="p-2 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="编辑"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => deleteTodo(todo.id)}
-                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="删除"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={filteredTodos.map(t => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ul className="divide-y divide-gray-100">
+                  {filteredTodos.map((todo) => (
+                    <SortableTodoItem
+                      key={todo.id}
+                      todo={todo}
+                      editingId={editingId}
+                      editingText={editingText}
+                      onToggle={toggleTodo}
+                      onDelete={deleteTodo}
+                      onStartEdit={startEditing}
+                      onSaveEdit={saveEdit}
+                      onCancelEdit={cancelEdit}
+                      onEditTextChange={setEditingText}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
 
@@ -266,7 +385,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="mt-12 text-center text-gray-400 text-sm">
-          <p>双击任务可编辑 · 使用 localStorage 本地存储</p>
+          <p>拖拽排序 · 双击编辑 · 本地存储</p>
         </footer>
       </div>
     </div>
